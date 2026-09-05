@@ -1,7 +1,27 @@
 [
   {
-    "id": "gamelife-test",
-    "name": "INSERISCI QUI IL NOME DEL PRODOTTO",
-    "url": "https://www.gamelife.it/INSERISCI-QUI-URL-PRODOTTO"
+    "id": "pokemon-m6-dominio-delta-etb",
+    "name": "Pokémon M6 Dominio Delta - Set Allenatore",
+    "url": "https://www.gamelife.it/en/ccpk0561-carte-pokemon-m6-dominio-delta-set-allenatore"
+  },
+  {
+    "id": "pokemon-30th-ultra-premium",
+    "name": "Pokémon 30th - Collezione Ultra Premium IT",
+    "url": "https://www.gamelife.it/en/ccpk0544-carte-pokemon-30th-collezione-ultra-premium-it"
+  },
+  {
+    "id": "pokemon-30th-etb",
+    "name": "Pokémon 30th - Set Allenatore Fuoriclasse IT",
+    "url": "https://www.gamelife.it/en/ccpk0548-carte-pokemon-30th-set-allenatore-fuoriclasse-it"
+  },
+  {
+    "id": "pokemon-30th-raccoglitore",
+    "name": "Pokémon 30th - Collezione con Raccoglitore IT",
+    "url": "https://www.gamelife.it/en/ccpk0547-carte-pokemon-30th-collezione-con-raccoglitore-it"
+  },
+  {
+    "id": "dragon-ball-fusion-world-st01",
+    "name": "Dragon Ball Fusion World Story Booster ST-01 - ENG",
+    "url": "https://www.gamelife.it/en/ccva0131-carte-dragon-ball-fusion-world-story-blister-eng"
   }
 ]
