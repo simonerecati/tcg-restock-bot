@@ -1,9 +1,9 @@
 import json
 import os
-import urllib.request
 from pathlib import Path
 
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -26,27 +26,31 @@ def save_json(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def get_page(url):
-    req = urllib.request.Request(
+def telegram_request(method, payload=None):
+    import urllib.request
+
+    url = f"https://api.telegram.org/bot{TOKEN}/{method}"
+
+    if payload is None:
+        with urllib.request.urlopen(url, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    data = json.dumps(payload).encode("utf-8")
+
+    request = urllib.request.Request(
         url,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 Chrome/131.0 Safari/537.36"
-            )
-        },
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
 
-    with urllib.request.urlopen(req, timeout=30) as response:
-        return response.read()
+    with urllib.request.urlopen(request, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 
 def get_chat_id():
-    url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
-
     try:
-        with urllib.request.urlopen(url, timeout=20) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        data = telegram_request("getUpdates")
 
         for update in reversed(data.get("result", [])):
             message = update.get("message")
@@ -55,41 +59,37 @@ def get_chat_id():
                 return message["chat"]["id"]
 
     except Exception as e:
-        print(f"Errore Telegram getUpdates: {e}")
+        print(f"Errore Telegram: {e}")
 
     return None
 
 
 def send_telegram(chat_id, text):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-
-    payload = json.dumps({
-        "chat_id": chat_id,
-        "text": text,
-        "disable_web_page_preview": False
-    }).encode("utf-8")
-
-    request = urllib.request.Request(
-        url,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+    telegram_request(
+        "sendMessage",
+        {
+            "chat_id": chat_id,
+            "text": text,
+            "disable_web_page_preview": False,
+        },
     )
 
-    with urllib.request.urlopen(request, timeout=20) as response:
-        print(response.read().decode("utf-8"))
 
-
-def check_product(product):
+def check_product(page, product):
     print(f"\nControllo: {product['name']}")
     print(product["url"])
 
-    html = get_page(product["url"])
-    soup = BeautifulSoup(html, "html.parser")
+    page.goto(
+        product["url"],
+        wait_until="domcontentloaded",
+        timeout=60000,
+    )
 
+    page.wait_for_timeout(3000)
+
+    soup = BeautifulSoup(page.content(), "html.parser")
     text = soup.get_text(" ", strip=True).lower()
 
-    # Stato chiaramente esaurito
     sold_out = any(
         phrase in text
         for phrase in [
@@ -99,7 +99,6 @@ def check_product(product):
         ]
     )
 
-    # Pulsanti/azioni che indicano acquisto effettivo
     buy_available = any(
         phrase in text
         for phrase in [
@@ -108,9 +107,6 @@ def check_product(product):
         ]
     )
 
-    # Per i preorder Gamelife non consideriamo sufficiente
-    # la semplice parola "prenota", perché può comparire
-    # anche nel riepilogo di prodotti non ancora prenotabili.
     available = buy_available and not sold_out
 
     print(f"Esaurito: {sold_out}")
@@ -134,29 +130,43 @@ def main():
         print("Invia /start al bot e riprova.")
         return
 
-    for product in products:
-        product_id = product["id"]
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
 
-        try:
-            available = check_product(product)
-            previous = state.get(product_id, False)
+        page = browser.new_page(
+            viewport={"width": 1366, "height": 768},
+            user_agent=(
+                "Mozilla/5.0 (X11; Linux x86_64) "
+                "AppleWebKit/537.36 "
+                "(KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
+        )
 
-            # Alert SOLO quando passa da non disponibile a disponibile
-            if available and not previous:
-                message = (
-                    "🚨 RESTOCK RILEVATO!\n\n"
-                    f"📦 {product['name']}\n"
-                    "🟢 DISPONIBILE\n\n"
-                    f"👉 {product['url']}"
-                )
+        for product in products:
+            product_id = product["id"]
 
-                send_telegram(chat_id, message)
-                print("🚨 ALERT INVIATO!")
+            try:
+                available = check_product(page, product)
+                previous = state.get(product_id, False)
 
-            state[product_id] = available
+                if available and not previous:
+                    message = (
+                        "🚨 RESTOCK RILEVATO!\n\n"
+                        f"📦 {product['name']}\n"
+                        "🟢 DISPONIBILE\n\n"
+                        f"👉 {product['url']}"
+                    )
 
-        except Exception as e:
-            print(f"❌ Errore durante il controllo: {e}")
+                    send_telegram(chat_id, message)
+                    print("🚨 ALERT INVIATO!")
+
+                state[product_id] = available
+
+            except Exception as e:
+                print(f"❌ Errore durante il controllo: {e}")
+
+        browser.close()
 
     save_json(STATE_FILE, state)
 
